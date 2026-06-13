@@ -10,7 +10,7 @@ A premium, end-to-end web + Android platform designed to optimize resumes, evalu
 ai-career-platform/
 ├── supabase/
 │   └── schema.sql             # SQL database table definitions & RLS
-├── backend/                   # FastAPI backend app
+├── backend/                   # FastAPI backend apps
 │   ├── app/
 │   │   ├── api/
 │   │   │   └── routes/
