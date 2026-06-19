@@ -34,33 +34,91 @@ The platform is built with a **Next.js 14 Web Portal**, a **FastAPI Backend**, a
 
 ```
 ai-career-platform/
+├── .env.example               # Root environment variables template
+├── deploy-gcp.sh              # Google Cloud Run deployment script
+├── docker-compose.yml         # Container orchestration configuration
+├── GCP_DEPLOYMENT.md          # Detailed GCP Cloud Run deployment manual
+├── README.md                  # Project overview and setup instructions
+│
 ├── backend/                   # FastAPI Python backend (v1.0.0)
 │   ├── app/
-│   │   ├── agents/            # LangGraph multi-agent systems (orchestrator.py)
-│   │   ├── api/routes/        # Auth, Resume, Analysis, Mentor, Settings routes
-│   │   ├── chains/            # LangChain LCEL chains (ATS, Roadmap, Gaps)
-│   │   ├── core/              # Dynamic LLM/Embedding provider resolvers
-│   │   ├── db/                # Supabase client configurations
-│   │   ├── embeddings/        # ChromaDB persistent collection indexing
-│   │   ├── models/            # Pydantic schemas
-│   │   ├── parsers/           # LlamaIndex PDF parsing structures
-│   │   └── main.py            # API entry point
-│   ├── tests/                 # pytest test suites (25 unit tests)
+│   │   ├── agents/
+│   │   │   └── orchestrator.py# LangGraph multi-agent orchestration (intent routing, specialized prompts)
+│   │   ├── api/routes/
+│   │   │   ├── analysis.py    # Resume matching, ATS score, & Weekly Roadmap triggers
+│   │   │   ├── auth.py        # Authentication endpoints (via Supabase Auth)
+│   │   │   ├── mentor.py      # AI Mentor Server-Sent Events (SSE) streaming chat & history
+│   │   │   ├── resume.py      # Ingest PDF, storage uploads, metadata save, Chroma indexing
+│   │   │   └── settings.py    # Setting up user-level OpenAI, Anthropic, & Gemini keys
+│   │   ├── chains/
+│   │   │   ├── ats_chain.py   # LangChain ATS recruitment alignment chain
+│   │   │   ├── roadmap_chain.py# LangChain Structured Study Roadmap compilation
+│   │   │   └── skill_gap_chain.py# LangChain Resume Improvements & matched/missing skills chain
+│   │   ├── core/
+│   │   │   ├── config.py      # Pydantic Settings initialization
+│   │   │   └── providers.py   # Dynamic LLM and Embedding resolvers
+│   │   ├── db/
+│   │   │   └── supabase_client.py# Supabase clients (standard and admin)
+│   │   ├── embeddings/
+│   │   │   ├── embed_resume.py# Slide-window text chunking & embedding
+│   │   │   ├── vector_similarity.py# Cosine similarity calculations
+│   │   │   └── vector_store.py# ChromaDB persistent collection and client
+│   │   ├── models/
+│   │   │   └── auth.py        # Auth Pydantic model schemas
+│   │   ├── parsers/
+│   │   │   └── pdf_parser.py  # LlamaIndex text reader & LLM structured data extraction
+│   │   └── main.py            # API entry point & CORS configuration
+│   ├── tests/                 # pytest test suites
+│   │   ├── test_analysis.py   # Mocked analysis & roadmaps unit tests
+│   │   ├── test_auth.py       # Auth flow schema verification
+│   │   ├── test_mentor.py     # AI Mentor streaming tests
+│   │   ├── test_resume.py     # PDF upload and storage deletion mocks
+│   │   └── test_settings.py   # Secure key management tests
+│   ├── Dockerfile             # Container configuration for backend
 │   └── requirements.txt       # Python dependencies list
 │
 ├── frontend/                  # Next.js 14 Web App (v0.1.0)
-│   ├── app/                   # App Router pages (auth, dashboard, resume, jobs, roadmap, mentor, settings)
-│   ├── components/            # Shared UI components
-│   ├── lib/                   # API client (Axios) and Supabase client
-│   ├── store/                 # Zustand authentication store
+│   ├── app/                   # App Router pages & styles
+│   │   ├── (auth)/
+│   │   │   ├── login/page.tsx # SignIn page
+│   │   │   └── register/page.tsx# SignUp page
+│   │   ├── dashboard/page.tsx # main dashboard panel
+│   │   ├── jobs/page.tsx      # Job matcher profile comparisons
+│   │   ├── mentor/page.tsx    # Live SSE token streaming mentor chat & Speech typing
+│   │   ├── resume/page.tsx    # Document pipeline, parser history browser
+│   │   ├── roadmap/page.tsx   # Study plan progress checkpoint checklist
+│   │   ├── settings/page.tsx  # User API keys configurations (OpenAI, Claude, Gemini)
+│   │   ├── globals.css        # Premium vanilla CSS styling system
+│   │   ├── layout.tsx         # Root layout context setup
+│   │   └── page.tsx           # Home landing page with glows and glassmorphism
+│   ├── components/
+│   │   └── Providers.tsx      # Zustand & Supabase Auth React contexts
+│   ├── lib/
+│   │   ├── api.ts             # Axios client with JWT auth headers interceptor
+│   │   └── supabase.ts        # Supabase JS client config
+│   ├── store/
+│   │   └── authStore.ts       # Zustand authentication state store
 │   ├── middleware.ts          # Edge cookie-based route protection
+│   ├── Dockerfile             # Container configuration for frontend
 │   └── package.json           # npm node dependencies
 │
 ├── mobile/                    # Flutter Mobile Client (v1.0.0+1)
 │   ├── lib/
-│   │   ├── screens/           # Dashboard, Login, Resume Upload, Job Compare, Roadmap, Mentor, Settings screens
-│   │   ├── services/          # API, Auth, and Career State providers
-│   │   └── widgets/           # Glassmorphic custom containers and loaders
+│   │   ├── screens/
+│   │   │   ├── dashboard_screen.dart    # Overview dashboard panel
+│   │   │   ├── job_compare_screen.dart  # Compare resumes with JD
+│   │   │   ├── login_screen.dart        # Authentication page
+│   │   │   ├── mentor_chat_screen.dart  # AI chat interface
+│   │   │   ├── resume_upload_screen.dart# File upload interface
+│   │   │   ├── roadmap_screen.dart      # Study roadmaps checklists
+│   │   │   └── settings_screen.dart     # Custom developer api keys configuration
+│   │   ├── services/
+│   │   │   ├── api_service.dart         # Multi-client HTTP REST and SSE streams client
+│   │   │   ├── auth_provider.dart       # User authentication notifier state
+│   │   │   └── career_provider.dart     # Resumes & analysis notifier state
+│   │   ├── widgets/
+│   │   │   └── glass_container.dart     # Glassmorphic visual container widget
+│   │   └── main.dart                    # Mobile app entry point
 │   └── pubspec.yaml           # Flutter pub package dependencies
 │
 └── supabase/
