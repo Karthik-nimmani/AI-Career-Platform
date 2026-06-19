@@ -34,15 +34,9 @@ The platform is built with a **Next.js 14 Web Portal**, a **FastAPI Backend**, a
 
 ```
 ai-career-platform/
-<<<<<<< HEAD
-├── supabase/
-│   └── schema.sql             # SQL database table definitions & RLS
-├── backend/                   # FastAPI backend apps
-=======
-├── backend/                   # FastAPI Python backend
->>>>>>> ff59b4a (Update README.md with comprehensive multi-client setup instructions)
+├── backend/                   # FastAPI Python backend (v1.0.0)
 │   ├── app/
-│   │   ├── agents/            # LangGraph multi-agent systems
+│   │   ├── agents/            # LangGraph multi-agent systems (orchestrator.py)
 │   │   ├── api/routes/        # Auth, Resume, Analysis, Mentor, Settings routes
 │   │   ├── chains/            # LangChain LCEL chains (ATS, Roadmap, Gaps)
 │   │   ├── core/              # Dynamic LLM/Embedding provider resolvers
@@ -54,7 +48,7 @@ ai-career-platform/
 │   ├── tests/                 # pytest test suites (25 unit tests)
 │   └── requirements.txt       # Python dependencies list
 │
-├── frontend/                  # Next.js 14 Web App
+├── frontend/                  # Next.js 14 Web App (v0.1.0)
 │   ├── app/                   # App Router pages (auth, dashboard, resume, jobs, roadmap, mentor, settings)
 │   ├── components/            # Shared UI components
 │   ├── lib/                   # API client (Axios) and Supabase client
@@ -62,7 +56,7 @@ ai-career-platform/
 │   ├── middleware.ts          # Edge cookie-based route protection
 │   └── package.json           # npm node dependencies
 │
-├── mobile/                    # Flutter Mobile Client
+├── mobile/                    # Flutter Mobile Client (v1.0.0+1)
 │   ├── lib/
 │   │   ├── screens/           # Dashboard, Login, Resume Upload, Job Compare, Roadmap, Mentor, Settings screens
 │   │   ├── services/          # API, Auth, and Career State providers
@@ -72,6 +66,18 @@ ai-career-platform/
 └── supabase/
     └── schema.sql             # SQL database table definitions & RLS rules
 ```
+
+---
+
+## Latest Version Matrix
+
+| Component | Stack | Version | Path |
+| :--- | :--- | :--- | :--- |
+| **Overall Platform** | Orchestrated System | `v1.0.0` | Root |
+| **Backend API** | FastAPI / Python | `v1.0.0` | [backend/](file:///e:/OneDrive/Desktop/AIC/ai-career-platform/backend) |
+| **Web Portal** | Next.js 14 / TS | `v0.1.0` | [frontend/](file:///e:/OneDrive/Desktop/AIC/ai-career-platform/frontend) |
+| **Mobile App** | Flutter / Dart | `v1.0.0+1` | [mobile/](file:///e:/OneDrive/Desktop/AIC/ai-career-platform/mobile) |
+| **Database Schema** | Supabase SQL | `v1.0.0` | [supabase/schema.sql](file:///e:/OneDrive/Desktop/AIC/ai-career-platform/supabase/schema.sql) |
 
 ---
 
