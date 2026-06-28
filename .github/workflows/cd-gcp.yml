@@ -1,0 +1,80 @@
+name: Continuous Deployment (GCP)
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-to-gcp:
+    name: Deploy to Google Cloud Run
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 1. Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # 2. Set up Cloud SDK
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # 3. Configure Docker authentication for Artifact Registry
+      - name: Configure Docker
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      # 4. Build and Push Backend Image using Cloud Build
+      - name: Build and Push Backend
+        run: |
+          gcloud builds submit --tag us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-career-platform/backend:latest ./backend
+
+      # 5. Deploy Backend to Google Cloud Run
+      - name: Deploy Backend
+        run: |
+          gcloud run deploy career-backend \
+            --image us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-career-platform/backend:latest \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8000 \
+            --set-env-vars="SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"
+
+      # 6. Retrieve Backend Service URL
+      - name: Get Backend URL
+        run: |
+          BACKEND_URL=$(gcloud run services describe career-backend --region us-central1 --format 'value(status.url)')
+          echo "BACKEND_URL=$BACKEND_URL" >> $GITHUB_ENV
+          echo "Backend URL is: $BACKEND_URL"
+
+      # 7. Build and Push Frontend Image (with Backend URL as Build Argument)
+      - name: Build and Push Frontend
+        run: |
+          gcloud builds submit --tag us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-career-platform/frontend:latest \
+            --build-arg="NEXT_PUBLIC_SUPABASE_URL=${{ secrets.SUPABASE_URL }}" \
+            --build-arg="NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" \
+            --build-arg="NEXT_PUBLIC_API_URL=${{ env.BACKEND_URL }}" \
+            ./frontend
+
+      # 8. Deploy Frontend to Google Cloud Run
+      - name: Deploy Frontend
+        run: |
+          gcloud run deploy career-frontend \
+            --image us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-career-platform/frontend:latest \
+            --region us-central1 \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 3000
+
+      # 9. Sync Backend CORS Allowed Origins with new Frontend URL
+      - name: Sync Backend CORS
+        run: |
+          FRONTEND_URL=$(gcloud run services describe career-frontend --region us-central1 --format 'value(status.url)')
+          echo "Frontend URL is: $FRONTEND_URL"
+          gcloud run services update career-backend \
+            --region us-central1 \
+            --update-env-vars="ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000,$FRONTEND_URL"
