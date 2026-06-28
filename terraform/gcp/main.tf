@@ -115,13 +115,13 @@ resource "google_secret_manager_secret_version" "jwt_secret_val" {
 
 # IAM Permissions for Secrets Access
 resource "google_secret_manager_secret_iam_member" "backend_secret_access" {
-  for_each = toset([
-    google_secret_manager_secret.supabase_service_role.id,
-    google_secret_manager_secret.openai_key.id,
-    google_secret_manager_secret.anthropic_key.id,
-    google_secret_manager_secret.jwt_secret.id
-  ])
-  secret_id = each.key
+  for_each = {
+    supabase  = google_secret_manager_secret.supabase_service_role.id
+    openai    = google_secret_manager_secret.openai_key.id
+    anthropic = google_secret_manager_secret.anthropic_key.id
+    jwt       = google_secret_manager_secret.jwt_secret.id
+  }
+  secret_id = each.value
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.backend_sa.email}"
 }
