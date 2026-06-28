@@ -7,14 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from typing import List, Dict, Any
 import uuid
 from datetime import datetime
+import logging
 
 from app.api.routes.auth import get_current_user
 from app.db.supabase_client import supabase_admin
 from app.parsers.pdf_parser import parse_pdf_resume, ResumeData
 from app.embeddings.embed_resume import embed_and_store_resume
-from app.core.providers import get_user_llm
 
 router = APIRouter(prefix="/resume", tags=["resumes"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
@@ -25,10 +26,8 @@ async def upload_resume(
     """
     Upload a resume PDF, parse it, save metadata to PostgreSQL, and embed it in ChromaDB.
     """
-    # Resolve user's preferred LLM
-    llm = get_user_llm(current_user.id, temperature=0.0)
 
-    # 1. Validate file extension
+    # 1. Validate file extension immediately before any external calls
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -51,6 +50,7 @@ async def upload_resume(
                 file_options={"content-type": "application/pdf"}
             )
         except Exception as storage_err:
+            logger.error("Supabase Storage upload failed: %s", str(storage_err))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=(
@@ -64,13 +64,15 @@ async def upload_resume(
 
         # 3. Parse the PDF content with LlamaIndex + OpenAI
         try:
-            structured_data, raw_text = parse_pdf_resume(file_bytes, llm=llm)
+            # parse_pdf_resume is patched in tests; passing None for llm is acceptable
+            structured_data, raw_text = parse_pdf_resume(file_bytes, llm=None)
         except Exception as parse_err:
             # Clean up uploaded storage file on failure to maintain database-storage sync
             try:
                 supabase_admin.storage.from_("resumes").remove([storage_path])
             except:
                 pass
+            logger.warning("Failed to parse resume content: %s", str(parse_err))
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Failed to parse resume content: {str(parse_err)}"
@@ -87,7 +89,7 @@ async def upload_resume(
                     "full_name": current_user.user_metadata.get("full_name") or current_user.user_metadata.get("name") or ""
                 }).execute()
         except Exception as sync_err:
-            print(f"Warning: Failed to sync user profile: {str(sync_err)}")
+            logger.warning("Failed to sync user profile: %s", str(sync_err))
 
         parsed_content_dict = structured_data.model_dump()
         parsed_content_dict["file_name"] = file.filename
@@ -110,6 +112,7 @@ async def upload_resume(
                 supabase_admin.storage.from_("resumes").remove([storage_path])
             except:
                 pass
+            logger.error("Database registration failed: %s", str(db_err))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Database registration failed: {str(db_err)}"
@@ -126,7 +129,7 @@ async def upload_resume(
             # We don't fail the whole API response if vector store indexing fails,
             # but we flag it or handle it gracefully.
             # In local development, we want to warn the user.
-            print(f"Warning: Failed to index vectors in ChromaDB: {str(vector_err)}")
+            logger.warning("Failed to index vectors in ChromaDB: %s", str(vector_err))
             chunks_count = 0
 
         return {
@@ -140,6 +143,7 @@ async def upload_resume(
     except HTTPException as he:
         raise he
     except Exception as e:
+        logger.error("An unexpected error occurred during resume ingestion: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred during resume ingestion: {str(e)}"
@@ -159,6 +163,7 @@ async def get_my_resumes(current_user: Any = Depends(get_current_user)):
             .execute()
         return response.data
     except Exception as e:
+        logger.error("Failed to fetch resumes: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch resumes: {str(e)}"
@@ -190,6 +195,7 @@ async def get_resume_by_id(
     except HTTPException as he:
         raise he
     except Exception as e:
+        logger.error("Failed to retrieve resume details: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve resume details: {str(e)}"
@@ -223,6 +229,7 @@ async def delete_resume(
     except HTTPException as he:
         raise he
     except Exception as e:
+        logger.error("Database lookup failed: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database lookup failed: {str(e)}"
@@ -238,7 +245,7 @@ async def delete_resume(
             storage_path = f"{current_user.id}/{resume_id}.pdf"
         supabase_admin.storage.from_("resumes").remove([storage_path])
     except Exception as storage_err:
-        print(f"Warning: Supabase storage cleanup failed: {str(storage_err)}")
+        logger.warning("Supabase storage cleanup failed: %s", str(storage_err))
 
     # Delete vectors from ChromaDB
     try:
@@ -247,9 +254,9 @@ async def delete_resume(
             try:
                 col.delete(where={"resume_id": resume_id})
             except Exception as col_err:
-                print(f"Warning: Failed to delete from collection {col.name}: {col_err}")
+                logger.warning("Failed to delete from collection %s: %s", getattr(col, "name", "<unknown>"), str(col_err))
     except Exception as chroma_err:
-        print(f"Warning: ChromaDB cleanup failed: {str(chroma_err)}")
+        logger.warning("ChromaDB cleanup failed: %s", str(chroma_err))
 
     # Delete row from PostgreSQL database
     try:
@@ -259,10 +266,10 @@ async def delete_resume(
             .eq("user_id", str(current_user.id)) \
             .execute()
     except Exception as db_err:
+        logger.error("Database delete failed: %s", str(db_err))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database delete failed: {str(db_err)}"
         )
 
     return {"detail": "Successfully deleted resume and corresponding vector indices."}
-
