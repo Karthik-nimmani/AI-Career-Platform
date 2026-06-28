@@ -110,61 +110,67 @@ async def mentor_chat_stream(
         # E. Initialize specialized LLM and stream tokens dynamically based on user settings keys
         from app.api.routes.settings import resolve_api_key
         
-        # Resolve keys with safe exceptions
         openai_key = None
+        anthropic_key = None
+        google_key = None
+
+        # Resolve keys with safe exceptions; if none are available, we will return a graceful error event
         try:
             openai_key = resolve_api_key(current_user.id, "openai")
-        except:
+        except Exception:
             pass
 
-        anthropic_key = None
         try:
             anthropic_key = resolve_api_key(current_user.id, "anthropic")
-        except:
+        except Exception:
             pass
 
-        google_key = None
         try:
             google_key = resolve_api_key(current_user.id, "google")
-        except:
+        except Exception:
             pass
 
-        # Select provider based on active agent and key availability
-        if next_agent == "career" and anthropic_key:
-            from langchain_anthropic import ChatAnthropic
-            llm = ChatAnthropic(
-                model="claude-3-5-sonnet-latest",
-                temperature=0.7,
-                anthropic_api_key=anthropic_key
-            )
-        elif next_agent == "career" and google_key:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.5-pro",
-                temperature=0.7,
-                google_api_key=google_key
-            )
-        else:
-            # Default fallback: OpenAI (require it if not resolved, which raises a 400 error)
-            if not openai_key:
-                openai_key = resolve_api_key(current_user.id, "openai")
-                
-            from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(
-                model="gpt-4o",
-                temperature=0.7,
-                openai_api_key=openai_key
-            )
+        llm = None
+        init_error = None
+        try:
+            if next_agent == "career" and anthropic_key:
+                from langchain_anthropic import ChatAnthropic
+                llm = ChatAnthropic(
+                    model="claude-3-5-sonnet-latest",
+                    temperature=0.7,
+                    anthropic_api_key=anthropic_key
+                )
+            elif next_agent == "career" and google_key:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                llm = ChatGoogleGenerativeAI(
+                    model="gemini-2.5-pro",
+                    temperature=0.7,
+                    google_api_key=google_key
+                )
+            else:
+                from langchain_openai import ChatOpenAI
+                llm = ChatOpenAI(
+                    model="gpt-4o",
+                    temperature=0.7,
+                    openai_api_key=openai_key or "sk-test-placeholder"
+                )
+        except Exception as init_err:
+            llm = None
+            init_error = str(init_err)
         
         full_reply = ""
         try:
-            try:
-                async for chunk in llm.astream(formatted_messages):
-                    token = chunk.content
-                    full_reply += token
-                    yield f"data: {json.dumps({'event': 'token', 'text': token})}\n\n"
-            except Exception as stream_err:
-                yield f"data: {json.dumps({'event': 'error', 'detail': str(stream_err)})}\n\n"
+            if llm is None:
+                error_detail = init_error or "No valid API key is configured for the selected mentor agent."
+                yield f"data: {json.dumps({'event': 'error', 'detail': error_detail})}\n\n"
+            else:
+                try:
+                    async for chunk in llm.astream(formatted_messages):
+                        token = chunk.content
+                        full_reply += token
+                        yield f"data: {json.dumps({'event': 'token', 'text': token})}\n\n"
+                except Exception as stream_err:
+                    yield f"data: {json.dumps({'event': 'error', 'detail': str(stream_err)})}\n\n"
         finally:
             # Save assistant reply in finally block to ensure it's written even if client disconnects
             if full_reply.strip():

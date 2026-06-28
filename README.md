@@ -168,9 +168,13 @@ ai-career-platform/
    ```bash
    pip install -r requirements.txt
    ```
-4. Copy environment template and configure `.env` with your Supabase values and default OpenAI/Anthropic/Gemini keys:
+4. Copy the repository environment template into the backend folder and configure `.env` with your Supabase values and default OpenAI/Anthropic/Gemini keys:
    ```bash
-   cp .env.example .env
+   cp ../.env.example .env
+   ```
+   On Windows PowerShell:
+   ```powershell
+   Copy-Item ..\.env.example .env -Force
    ```
 5. Start the local API server:
    ```bash
